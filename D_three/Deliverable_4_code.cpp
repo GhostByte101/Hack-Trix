@@ -2,28 +2,17 @@
 #include <string>
 using namespace std;
 
-/*
- Simple Hack Trix (Phase-complete but simple syntax)
- - Uses only structs (no classes)
- - Simple pointer usage, readable names
- - Features: systems (doubly list), logs (singly list), circular scanner,
-   undo stack, attack queue, adjacency matrix, BFS, spread
-*/
-
 const int MAX_SYSTEMS = 10;
 const int ATTACK_QUEUE_SIZE = 30;
-const double EXPLOIT_THRESHOLD = 0.6; // deterministic threshold
+const double EXPLOIT_THRESHOLD = 0.6;
 
-// ---------------------------
-// System data and doubly list
-// ---------------------------
 struct SysData
 {
     int id;
     string name;
     string ip;
     bool compromised;
-    double vuln; // 0..1
+    double vuln;
     bool patched;
 };
 
@@ -34,7 +23,6 @@ struct SysNode
     SysNode *next;
 };
 
-// head and tail pointers for systems
 struct SysList
 {
     SysNode *head;
@@ -42,7 +30,6 @@ struct SysList
     int size;
 };
 
-// initialize the systems list
 void initSysList(SysList &list)
 {
     list.head = nullptr;
@@ -50,7 +37,6 @@ void initSysList(SysList &list)
     list.size = 0;
 }
 
-// append system at tail, assign id automatically
 void appendSystem(SysList &list, const SysData &d)
 {
     SysNode *node = new SysNode();
@@ -71,7 +57,6 @@ void appendSystem(SysList &list, const SysData &d)
     list.size++;
 }
 
-// find by IP (returns pointer or nullptr)
 SysNode *findSystemByIP(SysList &list, const string &ip)
 {
     SysNode *cur = list.head;
@@ -129,9 +114,6 @@ void clearSysList(SysList &list)
     list.size = 0;
 }
 
-// ---------------------------
-// Logs (singly linked list)
-// ---------------------------
 struct LogNode
 {
     string msg;
@@ -185,10 +167,6 @@ void clearLogs(LogList &l)
     l.head = l.tail = nullptr;
 }
 
-// ---------------------------
-// Circular scanner (round-robin)
-// stores pointers to SysNode
-// ---------------------------
 struct ScanNode
 {
     SysNode *s;
@@ -202,13 +180,12 @@ struct Scanner
 
 void initScanner(Scanner &sc) { sc.cur = nullptr; }
 
-// build circular list from SysList (simple)
 void buildScannerFromSysList(Scanner &sc, SysList &list)
 {
-    // first clear existing
+
     if (sc.cur)
     {
-        // free circular nodes
+
         ScanNode *start = sc.cur;
         ScanNode *it = sc.cur->next;
         while (it != start)
@@ -244,7 +221,6 @@ void buildScannerFromSysList(Scanner &sc, SysList &list)
     }
 }
 
-// scan next: returns scanned SysNode pointer (or nullptr)
 SysNode *scannerNext(Scanner &sc)
 {
     if (!sc.cur)
@@ -254,10 +230,6 @@ SysNode *scannerNext(Scanner &sc)
     return res;
 }
 
-// ---------------------------
-// Undo stack (simple linked stack)
-// each action stores sysId and previous compromised state
-// ---------------------------
 struct Action
 {
     int sysId;
@@ -299,9 +271,6 @@ void clearUndo(UndoStack &st)
     }
 }
 
-// ---------------------------
-// Attack queue (circular array of strings)
-// ---------------------------
 struct AttackQueue
 {
     string items[ATTACK_QUEUE_SIZE];
@@ -355,10 +324,6 @@ void showAttackQ(AttackQueue &q)
     cout << "-------------------------\n";
 }
 
-// ---------------------------
-// Graph: adjacency matrix (MAX_SYSTEMS x MAX_SYSTEMS)
-// Use system ids assigned at append time (0..n-1)
-// ---------------------------
 struct Graph
 {
     bool adj[MAX_SYSTEMS][MAX_SYSTEMS];
@@ -392,7 +357,7 @@ struct Graph
         }
         cout << "------------------------\n";
     }
-    // BFS to find path s -> t ; parent[] must have size MAX_SYSTEMS and will be filled with -1 default
+
     bool bfs(int s, int t, int upto, int parent[])
     {
         if (s < 0 || t < 0 || s >= upto || t >= upto)
@@ -424,9 +389,6 @@ struct Graph
     }
 };
 
-// ---------------------------
-// Utility: attempt exploit (deterministic)
-// ---------------------------
 bool attemptExploit(SysData &s)
 {
     double eff = s.vuln;
@@ -435,13 +397,9 @@ bool attemptExploit(SysData &s)
     return (eff >= EXPLOIT_THRESHOLD);
 }
 
-// ---------------------------
-// Application functions (seed, process attack, spread, menu helpers)
-// ---------------------------
-
 void seedDefaultNetwork(SysList &systems, Graph &graph)
 {
-    // make some systems (edit if you want)
+
     SysData a;
     a.name = "Main Server";
     a.ip = "192.168.0.1";
@@ -479,15 +437,13 @@ void seedDefaultNetwork(SysList &systems, Graph &graph)
     appendSystem(systems, d);
     appendSystem(systems, e);
 
-    // add edges by ids (ids assigned as appended)
     graph.addEdge(0, 1); // Main-Admin
-    graph.addEdge(1, 2); // Admin-DB
+    graph.addEdge(1, 2); // Admin-Database
     graph.addEdge(0, 3); // Main-Firewall
     graph.addEdge(3, 4); // Firewall-Backup
-    graph.addEdge(2, 4); // DB-Backup
+    graph.addEdge(2, 4); // Database-Backup
 }
 
-// Spread attempt from a compromised node to all neighbors (one-step)
 void attemptSpread(SysNode *node, SysList &systems, Graph &graph, LogList &logs, UndoStack &undo)
 {
     if (!node)
@@ -522,7 +478,6 @@ void attemptSpread(SysNode *node, SysList &systems, Graph &graph, LogList &logs,
     }
 }
 
-// Process next attack from attack queue
 void processNextAttack(AttackQueue &aq, SysList &systems, Graph &graph, LogList &logs, UndoStack &undo)
 {
     if (attackQEmpty(aq))
@@ -539,7 +494,7 @@ void processNextAttack(AttackQueue &aq, SysList &systems, Graph &graph, LogList 
         appendLog(logs, "Attack on unknown IP: " + ip);
         return;
     }
-    // save undo for this target
+
     pushUndo(undo, target->data.id, target->data.compromised);
 
     if (attemptExploit(target->data))
@@ -548,7 +503,7 @@ void processNextAttack(AttackQueue &aq, SysList &systems, Graph &graph, LogList 
         string msg = "BREACH: " + target->data.name + " (" + target->data.ip + ")";
         cout << "[!!!] " << msg << "\n";
         appendLog(logs, msg);
-        // try spread
+
         attemptSpread(target, systems, graph, logs, undo);
     }
     else
@@ -559,7 +514,6 @@ void processNextAttack(AttackQueue &aq, SysList &systems, Graph &graph, LogList 
     }
 }
 
-// Undo last action (restore compromised state)
 void doUndo(UndoStack &undo, SysList &systems, LogList &logs)
 {
     int id;
@@ -581,17 +535,10 @@ void doUndo(UndoStack &undo, SysList &systems, LogList &logs)
     cout << msg << "\n";
 }
 
-// Helper: convert IP path ids to printable IP path
 void printPathIds(SysList &systems, int parent[])
 {
-    // find last parent not -1 and print using findSystemById
-    // This function should be called after BFS where parent[] is filled
-    // We'll just print the path reconstruction when used in menu.
 }
 
-// ---------------------------
-// Main menu and program
-// ---------------------------
 int main()
 {
     cout << "=== Hack Trix (simplified) ===\n";
@@ -764,13 +711,12 @@ int main()
         }
     }
 
-    // cleanup simple
     clearUndo(undo);
     clearLogs(logs);
-    // clear circular scanner nodes
+
     if (scanner.cur)
     {
-        // delete circular nodes similarly to build function's clear
+
         ScanNode *start = scanner.cur;
         ScanNode *it = scanner.cur->next;
         while (it != start)
